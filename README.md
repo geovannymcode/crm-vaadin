@@ -1,110 +1,222 @@
-# My Application
+# CRM Interno — Vaadin Flow + Spring Boot
 
-A Spring Boot + Vaadin project. Build your UI in pure Java — no HTML, no JavaScript.
+CRM mínimo para gestionar clientes, construido 100 % en Java con **Vaadin Flow 25** sobre **Spring Boot 4**. Sin HTML, sin JavaScript, sin API REST intermedia: la UI vive en el servidor y llama directamente a los servicios de Spring.
 
-> **New to Vaadin?** The 5-minute [Quickstart](https://vaadin.com/quickstart) walks you from here to your first running app, a live code change, and an AI-assisted edit with Copilot.
+El proyecto está pensado como material de taller (BaqJUG): cada commit agrega una capacidad concreta, así que el historial de git funciona como una guía paso a paso.
 
 ---
 
-## Fastest start — no plugin needed
+## Stack
 
-From the project folder:
+| Pieza            | Versión / detalle                                  |
+|------------------|----------------------------------------------------|
+| Java             | 25                                                 |
+| Spring Boot      | 4.1.2                                              |
+| Vaadin Flow      | 25.3.5 (tema **Aura**, modo oscuro, `@Push`)       |
+| Persistencia     | Spring Data JPA + **H2 en memoria**                |
+| Build            | Maven Wrapper (`./mvnw`)                           |
+| Contenedor       | Dockerfile multi-stage (Temurin 25 JRE Alpine)     |
 
-```bash
-./mvnw spring-boot:run        # Windows: mvnw.cmd spring-boot:run
+---
+
+## Funcionalidades
+
+- **Shell de la aplicación** con `AppLayout` y navegación lateral (`SideNav`): *Inicio* y *Clientes*.
+- **Grid de clientes** con columnas nombre, apellido, correo, estado y fecha de alta (nombre ordenable).
+- **Búsqueda reactiva** con *signals*: filtra por nombre, apellido, correo o estado mientras escribes (`ValueChangeMode.LAZY`).
+- **Formulario de detalle** enlazado a la selección del grid mediante `Binder`, con validaciones de campos obligatorios.
+- **Edición con buffer**: los cambios solo se aplican al pulsar *Guardar*; *Descartar* restaura los valores originales.
+- **Crear y eliminar** clientes; la eliminación pide confirmación con `ConfirmDialog`.
+- **Datos de ejemplo** cargados al arrancar desde `data.sql`.
+
+---
+
+## Arquitectura
+
+Dos paquetes con responsabilidades claras: `ui` (vistas Vaadin) y `backend` (dominio + persistencia). La UI solo conoce `CustomerService`; el repositorio es *package-private* y no se puede usar desde las vistas.
+
+```mermaid
+flowchart LR
+    Browser["Navegador<br/>(cliente Vaadin)"]
+
+    subgraph JVM["Spring Boot (JVM)"]
+        direction LR
+        subgraph UI["com.baqjug.crm.ui"]
+            MainLayout["MainLayout<br/>@Layout"]
+            HomeView["HomeView<br/>@Route(&quot;&quot;)"]
+            CustomerListView["CustomerListView<br/>@Route(&quot;customers&quot;)"]
+        end
+
+        subgraph Backend["com.baqjug.crm.backend"]
+            CustomerService["CustomerService<br/>@Service @Transactional"]
+            CustomerRepository["CustomerRepository<br/>JpaRepository (package-private)"]
+            Customer["Customer<br/>@Entity"]
+        end
+    end
+
+    H2[("H2 en memoria<br/>tabla customer")]
+    DataSQL["data.sql"]
+
+    Browser <-- "WebSocket / HTTP<br/>(@Push)" --> MainLayout
+    MainLayout --> HomeView
+    MainLayout --> CustomerListView
+    CustomerListView --> CustomerService
+    CustomerService --> CustomerRepository
+    CustomerRepository --> Customer
+    CustomerRepository --> H2
+    DataSQL -. "seed al arrancar" .-> H2
 ```
 
-Then open **http://localhost:8080**.
+### Modelo de dominio
 
-The first start takes ~30 seconds while Maven downloads dependencies. This project has no views yet, so the browser shows a *Could not navigate to ''* (route not found) page. That means the app is running: add your first view, a class annotated with `@Route("")`, to replace it.
+```mermaid
+classDiagram
+    class Customer {
+        -Long id
+        -String firstName
+        -String lastName
+        -String email
+        -Status status
+        -LocalDate customerSince
+    }
 
-> **Port 8080 already in use?** Stop the other process, or set `server.port=8081` in `src/main/resources/application.properties` and open that port instead.
->
-> **To stop the app:** press `Ctrl+C` in the terminal (or the red Stop button if you launched from your IDE).
+    class Status {
+        <<enumeration>>
+        LEAD
+        PROSPECT
+        CUSTOMER
+        INACTIVE
+    }
 
-## Optional upgrade — instant hotswap
+    class CustomerService {
+        +findAll() List~Customer~
+        +save(Customer) Customer
+        +delete(Customer) void
+    }
 
-Running with `spring-boot:run` works, but Java code changes need a server restart. For **live reload** — edit Java, see it in the browser without restarting — install the **Vaadin plugin** and start the app through it:
+    class CustomerRepository {
+        <<interface>>
+    }
 
-- **IntelliJ IDEA:** install *Vaadin* from the JetBrains Marketplace → **Debug using Hotswap Agent** (dropdown next to Run). *Just installed it? Let IntelliJ finish indexing, or restart it, if the menu item isn't there yet.*
-- **VS Code:** install the *Vaadin* extension → **Vaadin: Debug using Hotswap Agent** from the command palette.
-- **Eclipse:** install the *Vaadin* plugin → right-click the project → **Run As → Vaadin Application**.
-
-This is what makes the edit-and-see-it loop feel instant — and it's required for the AI edits in [Vaadin Copilot](https://vaadin.com/docs/latest/tools/copilot).
-
-> **Run the app one way at a time.** `./mvnw spring-boot:run`, your IDE, and the Dev Loop all serve on port 8080, so stop one before starting another. If an AI coding agent edits the code for you, use the Dev Loop instead of the IDE — see [Agentic Development](#agentic-development).
-
----
-
-## Ask your AI assistant about Vaadin (optional)
-
-If you use Claude Code, Cursor, or another AI coding assistant, connect it to the **Vaadin MCP server** so it answers against real Vaadin docs and the exact API of your installed version — instead of guessing from outdated training data.
-
-The one-time setup is described in [Vaadin MCP server](https://vaadin.com/docs/latest/building-apps/mcp).
-
----
-
-## Agentic Development
-
-If you develop with an AI coding agent, such as Claude Code or Codex, enable the Vaadin Dev Loop. It lets the agent make
-its changes live in the running application with a single command, and tells it whether they took effect, without
-restarting the application or checking screenshots. To enable it, run:
-
-```bash
-./mvnw vaadin:install-dev-cli
+    Customer --> Status
+    CustomerService --> CustomerRepository
+    CustomerRepository ..> Customer : JpaRepository~Customer, Long~
 ```
 
-This installs the Dev Loop CLI into `.vaadin/`, and skills that teach your agent how to use it into `.agents/skills/` and
-`.claude/skills/`. Commit these files with the rest of the project, and run the command again after upgrading Vaadin.
-
-Once it is enabled, start the application through the Dev Loop, and leave the page open in the browser:
-
-```bash
-.vaadin/vaadin-dev start      # Windows: .vaadin\vaadin-dev.cmd start
-```
-
-The Dev Loop owns the application process and brings its own Hotswap Agent, so do not also start the application with
-`./mvnw spring-boot:run` or an IDE run or debug configuration: the second launcher fights the Dev Loop for port 8080. Use
-`.vaadin/vaadin-dev status` to see whether the application is running, and `.vaadin/vaadin-dev restart` instead of
-restarting it from the IDE.
-
-The Dev Loop is a preview feature. To learn more, including how to give your agent access to the Vaadin documentation,
-see the [Dev Loop tutorial](https://vaadin.com/docs/v25/building-apps/agentic-development/dev-loop-tutorial).
+`Customer.equals()` compara por `id` y `hashCode()` es constante por clase: es el patrón recomendado para entidades JPA con id generado, y permite que el grid reconozca la misma fila antes y después de guardar.
 
 ---
 
-## Build for production
+## Flujo reactivo de la vista de clientes
+
+`CustomerListView` usa dos `ValueSignal` como única fuente de verdad. Los componentes se enlazan a ellas y los `Signal.effect` se reejecutan solos cuando cambian.
+
+```mermaid
+flowchart TB
+    search["TextField 'Buscar'"] -- bindValue --> searchSignal(["searchValue : ValueSignal&lt;String&gt;"])
+    searchSignal -- "Signal.effect" --> refresh["updateCustomerList(query)<br/>→ grid.setItems(...)"]
+
+    grid["Grid&lt;Customer&gt;<br/>asSingleSelect()"] -- bindValue --> editedSignal(["editedCustomer : ValueSignal&lt;Customer&gt;"])
+    addBtn["Botón +"] -- "set(new Customer())" --> editedSignal
+
+    editedSignal -- "Signal.effect" --> readBean["binder.readBean(customer)"]
+    editedSignal -- bindVisible --> formVisible["Formulario visible<br/>si customer != null"]
+    editedSignal -- bindText --> saveText["Texto botón:<br/>'Crear' / 'Guardar'"]
+    editedSignal -- bindEnabled --> deleteEnabled["'Eliminar' habilitado<br/>solo si ya existe"]
+```
+
+### Guardar un cliente
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant V as CustomerListView
+    participant B as Binder
+    participant S as CustomerService
+    participant DB as H2
+
+    U->>V: Clic en "Guardar" / "Crear"
+    V->>B: writeBean(editedCustomer)
+    alt Validación falla
+        B-->>V: ValidationException
+        V-->>U: Los campos muestran su error
+    else Validación OK
+        B-->>V: Bean actualizado
+        V->>S: save(customer)
+        S->>DB: INSERT / UPDATE
+        DB-->>S: OK
+        V->>S: findAll()
+        S-->>V: List<Customer>
+        V-->>U: Grid refrescado (respeta el filtro actual)
+    end
+```
+
+---
+
+## Estructura del proyecto
+
+```
+src/main/java/com/baqjug/crm
+├── Application.java              # Punto de entrada Spring Boot
+├── AppShell.java                 # Tema Aura, modo oscuro, @Push, styles.css
+├── backend
+│   ├── Customer.java             # Entidad JPA
+│   ├── CustomerRepository.java   # JpaRepository (package-private)
+│   ├── CustomerService.java      # API transaccional para la UI
+│   └── Status.java               # LEAD | PROSPECT | CUSTOMER | INACTIVE
+└── ui
+    ├── MainLayout.java           # AppLayout + SideNav
+    ├── HomeView.java             # Ruta "/"
+    └── CustomerListView.java     # Ruta "/customers"
+
+src/main/resources
+├── application.properties
+├── data.sql                      # Datos de ejemplo
+└── META-INF/resources/styles.css # Variables del tema Aura
+```
+
+---
+
+## Cómo ejecutarlo
+
+Requisitos: **JDK 25**. Maven no hace falta, el wrapper lo descarga.
+
+```bash
+./mvnw spring-boot:run
+```
+
+Abre http://localhost:8080 (el navegador se abre solo en modo desarrollo). El primer arranque tarda más porque descarga dependencias y prepara el frontend.
+
+Notas:
+
+- El puerto se cambia con la variable `PORT` (por defecto `8080`).
+- La base de datos es **H2 en memoria**: los cambios se pierden al reiniciar y `data.sql` vuelve a sembrar los clientes de ejemplo.
+- Para recarga en caliente de código Java, arranca desde el IDE con el plugin de Vaadin (*Debug using Hotswap Agent*).
+
+### Build de producción
 
 ```bash
 ./mvnw package
-java -jar target/*.jar
 ```
-
-To build a Docker image, run:
 
 ```bash
-docker build -t my-application:latest .
+java -jar target/crm-vaadin-1.0-SNAPSHOT.jar
 ```
 
-If you use commercial components, pass the license key as a build secret:
+### Docker
 
 ```bash
-docker build --secret id=proKey,src=$HOME/.vaadin/proKey -t my-application:latest .
+docker build -t crm-vaadin:latest .
 ```
-
-To run the image, run:
 
 ```bash
-docker run -p 8080:8080 -m 2g my-application:latest
+docker run -p 8080:8080 -m 2g crm-vaadin:latest
 ```
 
-The application is then available at http://localhost:8080. The `-m` option sets the memory limit of the container. The
-application uses up to 75% of it for the Java heap, which holds the UI state of all users, so adjust the limit to fit
-your application.
+La imagen arranca con `--spring.profiles.active=prod` y reserva el 75 % de la memoria del contenedor para el heap, que es donde vive el estado de la UI de cada usuario.
 
-## Learn more
+---
 
-- [Vaadin Quickstart](https://vaadin.com/quickstart) — the 5-minute getting-started path
-- [Components](https://vaadin.com/docs/latest/components) — 50+ UI components, all callable from Java
-- [Vaadin Copilot](https://vaadin.com/docs/latest/tools/copilot) — visual + AI editing in the browser
-- [Full documentation](https://vaadin.com/docs)
+## Licencia
+
+Dominio público ([Unlicense](LICENSE.md)).

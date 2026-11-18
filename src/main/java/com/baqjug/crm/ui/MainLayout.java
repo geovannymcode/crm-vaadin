@@ -16,6 +16,7 @@ public class MainLayout extends AppLayout {
 
         var logo = VaadinIcon.VAADIN_H.create();
         var appName = new Span("CRM Interno");
+        appName.addClassNames("app-name");
         var header = new HorizontalLayout(logo, appName);
         header.setPadding(true);
 

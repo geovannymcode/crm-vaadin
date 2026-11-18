@@ -9,6 +9,7 @@ import com.baqjug.crm.backend.Customer;
 import com.baqjug.crm.backend.CustomerService;
 import com.baqjug.crm.backend.Status;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -72,6 +73,7 @@ public class CustomerListView extends VerticalLayout {
 
         var addBtn = new Button(VaadinIcon.PLUS.create());
         addBtn.addClickListener(e -> addCustomer());
+        addBtn.addThemeVariants(ButtonVariant.PRIMARY);
 
         var toolbar = new HorizontalLayout(title, search, addBtn);
         toolbar.setWidthFull();
@@ -124,6 +126,7 @@ public class CustomerListView extends VerticalLayout {
         var saveBtn = new Button();
         saveBtn.bindText(editedCustomer.map(customer -> isNew(customer) ? "Crear" : "Guardar"));
         saveBtn.addClickListener(e -> save());
+        saveBtn.addThemeVariants(ButtonVariant.PRIMARY);
 
         var discardBtn = new Button("Descartar");
         discardBtn.addClickListener(e -> binder.readBean(editedCustomer.peek()));
@@ -131,6 +134,7 @@ public class CustomerListView extends VerticalLayout {
         var deleteBtn = new Button("Eliminar");
         deleteBtn.addClickListener(e -> confirmDelete());
         deleteBtn.bindEnabled(editedCustomer.map(customer -> !isNew(customer)));
+        deleteBtn.addThemeVariants(ButtonVariant.ERROR, ButtonVariant.TERTIARY);
 
         var buttons = new HorizontalLayout(saveBtn, discardBtn, deleteBtn);
 
@@ -138,6 +142,7 @@ public class CustomerListView extends VerticalLayout {
         Signal.effect(form, () -> binder.readBean(editedCustomer.get()));
         form.setWidth("300px");
         form.bindVisible(editedCustomer.map(customer -> customer != null));
+        form.getStyle().setPaddingTop("30px");
         return form;
     }
 
@@ -169,6 +174,7 @@ public class CustomerListView extends VerticalLayout {
                 .formatted(customer.getFirstName(), customer.getLastName()));
         dialog.setCancelable(true);
         dialog.setConfirmText("Eliminar");
+        dialog.setConfirmButtonTheme("primary error");
         dialog.addConfirmListener(e -> {
             customerService.delete(customer);
             updateCustomerList();
