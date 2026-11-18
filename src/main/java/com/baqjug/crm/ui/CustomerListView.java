@@ -7,15 +7,20 @@ import java.util.stream.Collectors;
 
 import com.baqjug.crm.backend.Customer;
 import com.baqjug.crm.backend.Status;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.html.H3;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
+import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.signals.Signal;
@@ -32,12 +37,14 @@ public class CustomerListView extends VerticalLayout {
 
     public CustomerListView() {
         setSizeFull();
-        var search = createSearch();
+        var toolbar = createToolbar();
         configureGrid();
         var form = createForm();
+
         var content = new HorizontalLayout(grid, form);
         content.setSizeFull();
-        add(search, content);
+
+        add(toolbar, content);
 
     }
 
@@ -61,13 +68,22 @@ public class CustomerListView extends VerticalLayout {
         grid.setSizeFull();
     }
 
-    private TextField createSearch() {
+    private HorizontalLayout createToolbar() {
+        var title = new H3("Clientes");
+
         var search = new TextField();
         search.setPlaceholder("Buscar");
         search.setValueChangeMode(ValueChangeMode.LAZY);
         search.bindValue(searchValue, searchValue::set);
         Signal.effect(search, () -> updateCustomerList(searchValue.get()));
-        return search;
+
+        var addBtn = new Button(VaadinIcon.PLUS.create());
+        addBtn.addClickListener(e -> addCustomer());
+
+        var toolbar = new HorizontalLayout(title, search, addBtn);
+        toolbar.setWidthFull();
+        toolbar.setFlexGrow(1, title);
+        return toolbar;
     }
 
     private void updateCustomerList(String query) {
@@ -112,10 +128,60 @@ public class CustomerListView extends VerticalLayout {
 
         binder.bind(customerSince, Customer::getCustomerSince, Customer::setCustomerSince);
 
-        var form = new FormLayout(firstName, lastName, email, status, customerSince);
-        Signal.effect(form, () -> binder.setBean(editedCustomer.get()));
+        var saveBtn = new Button("Guardar");
+        saveBtn.addClickListener(e -> save());
+
+        var discardBtn = new Button("Descartar");
+        discardBtn.addClickListener(e -> binder.readBean(editedCustomer.peek()));
+
+        var deleteBtn = new Button("Eliminar");
+        deleteBtn.addClickListener(e -> confirmDelete());
+        deleteBtn.bindEnabled(editedCustomer.map(customer -> customer != null));
+
+        var buttons = new HorizontalLayout(saveBtn, discardBtn, deleteBtn);
+
+        var form = new FormLayout(firstName, lastName, email, status, customerSince, buttons);
+        Signal.effect(form, () -> binder.readBean(editedCustomer.get()));
         form.setWidth("300px");
         form.bindVisible(editedCustomer.map(customer -> customer != null));
         return form;
     }
+
+    private void save() {
+        try {
+            var customer = editedCustomer.peek();
+            binder.writeBean(customer);
+            if (!customers.contains(customer)) {
+                customers.add(customer);
+            }
+            updateCustomerList();
+        } catch (ValidationException ex) {
+            // The fields already show their own error messages.
+        }
+    }
+
+    private void updateCustomerList() {
+        updateCustomerList(searchValue.peek());
+    }
+
+    private void addCustomer() {
+        editedCustomer.set(new Customer());
+    }
+
+    private void confirmDelete() {
+    var customer = editedCustomer.peek();
+
+    var dialog = new ConfirmDialog();
+    dialog.setHeader("Eliminar cliente");
+    dialog.setText("¿Seguro que quieres eliminar a %s %s?"
+            .formatted(customer.getFirstName(), customer.getLastName()));
+    dialog.setCancelable(true);
+    dialog.setConfirmText("Eliminar");
+    dialog.addConfirmListener(e -> {
+        customers.remove(customer);
+        updateCustomerList();
+    });
+    dialog.open();
+}
+
 }
