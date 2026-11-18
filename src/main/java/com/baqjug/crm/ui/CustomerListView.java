@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.baqjug.crm.backend.Customer;
+import com.baqjug.crm.backend.CustomerService;
 import com.baqjug.crm.backend.Status;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -30,12 +31,14 @@ import com.vaadin.flow.signals.local.ValueSignal;
 public class CustomerListView extends VerticalLayout {
 
     private final Grid<Customer> grid = new Grid<>();
-    private final List<Customer> customers = getSampleCustomers();
     private final ValueSignal<String> searchValue = new ValueSignal<>("");
     private final ValueSignal<Customer> editedCustomer = new ValueSignal<>(null);
     private final Binder<Customer> binder = new Binder<>();
+    private final CustomerService customerService;
 
-    public CustomerListView() {
+    public CustomerListView(CustomerService customerService) {
+        this.customerService = customerService;
+
         setSizeFull();
         var toolbar = createToolbar();
         configureGrid();
@@ -46,16 +49,6 @@ public class CustomerListView extends VerticalLayout {
 
         add(toolbar, content);
 
-    }
-
-    private List<Customer> getSampleCustomers() {
-        return new ArrayList<>(List.of(
-                new Customer("Alicia", "Nieto", "alicia.nieto@meridian.co",
-                        Status.CUSTOMER, LocalDate.of(2023, 1, 15)),
-                new Customer("Boris", "Martínez", "boris.martinez@bluefern.io",
-                        Status.CUSTOMER, LocalDate.of(2022, 11, 3)),
-                new Customer("Carolina", "Schmidt", "carolina.schmidt@meridian.co",
-                        Status.PROSPECT, null)));
     }
 
     private void configureGrid() {
@@ -87,11 +80,11 @@ public class CustomerListView extends VerticalLayout {
     }
 
     private void updateCustomerList(String query) {
-        var filtered = customers;
+        var filtered = customerService.findAll();
 
         if (!query.isEmpty()) {
             var lower = query.toLowerCase();
-            filtered = customers.stream()
+            filtered = filtered.stream()
                     .filter(c -> c.getFirstName().toLowerCase().contains(lower)
                             || c.getLastName().toLowerCase().contains(lower)
                             || c.getEmail().toLowerCase().contains(lower)
@@ -128,7 +121,8 @@ public class CustomerListView extends VerticalLayout {
 
         binder.bind(customerSince, Customer::getCustomerSince, Customer::setCustomerSince);
 
-        var saveBtn = new Button("Guardar");
+        var saveBtn = new Button();
+        saveBtn.bindText(editedCustomer.map(customer -> isNew(customer) ? "Crear" : "Guardar"));
         saveBtn.addClickListener(e -> save());
 
         var discardBtn = new Button("Descartar");
@@ -136,7 +130,7 @@ public class CustomerListView extends VerticalLayout {
 
         var deleteBtn = new Button("Eliminar");
         deleteBtn.addClickListener(e -> confirmDelete());
-        deleteBtn.bindEnabled(editedCustomer.map(customer -> customer != null));
+        deleteBtn.bindEnabled(editedCustomer.map(customer -> !isNew(customer)));
 
         var buttons = new HorizontalLayout(saveBtn, discardBtn, deleteBtn);
 
@@ -151,9 +145,7 @@ public class CustomerListView extends VerticalLayout {
         try {
             var customer = editedCustomer.peek();
             binder.writeBean(customer);
-            if (!customers.contains(customer)) {
-                customers.add(customer);
-            }
+            customerService.save(customer);
             updateCustomerList();
         } catch (ValidationException ex) {
             // The fields already show their own error messages.
@@ -169,19 +161,23 @@ public class CustomerListView extends VerticalLayout {
     }
 
     private void confirmDelete() {
-    var customer = editedCustomer.peek();
+        var customer = editedCustomer.peek();
 
-    var dialog = new ConfirmDialog();
-    dialog.setHeader("Eliminar cliente");
-    dialog.setText("¿Seguro que quieres eliminar a %s %s?"
-            .formatted(customer.getFirstName(), customer.getLastName()));
-    dialog.setCancelable(true);
-    dialog.setConfirmText("Eliminar");
-    dialog.addConfirmListener(e -> {
-        customers.remove(customer);
-        updateCustomerList();
-    });
-    dialog.open();
-}
+        var dialog = new ConfirmDialog();
+        dialog.setHeader("Eliminar cliente");
+        dialog.setText("¿Seguro que quieres eliminar a %s %s?"
+                .formatted(customer.getFirstName(), customer.getLastName()));
+        dialog.setCancelable(true);
+        dialog.setConfirmText("Eliminar");
+        dialog.addConfirmListener(e -> {
+            customerService.delete(customer);
+            updateCustomerList();
+        });
+        dialog.open();
+    }
+
+    private boolean isNew(Customer customer) {
+        return customer != null && customer.getId() == null;
+    }
 
 }
