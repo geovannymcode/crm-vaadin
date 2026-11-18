@@ -43,8 +43,8 @@ flowchart LR
         direction LR
         subgraph UI["com.baqjug.crm.ui"]
             MainLayout["MainLayout<br/>@Layout"]
-            HomeView["HomeView<br/>@Route(&quot;&quot;)"]
-            CustomerListView["CustomerListView<br/>@Route(&quot;customers&quot;)"]
+            HomeView["HomeView<br/>@Route(#quot;#quot;)"]
+            CustomerListView["CustomerListView<br/>@Route(#quot;customers#quot;)"]
         end
 
         subgraph Backend["com.baqjug.crm.backend"]
@@ -57,7 +57,7 @@ flowchart LR
     H2[("H2 en memoria<br/>tabla customer")]
     DataSQL["data.sql"]
 
-    Browser <-- "WebSocket / HTTP<br/>(@Push)" --> MainLayout
+    Browser <-->|"WebSocket / HTTP (@Push)"| MainLayout
     MainLayout --> HomeView
     MainLayout --> CustomerListView
     CustomerListView --> CustomerService
@@ -113,10 +113,10 @@ classDiagram
 
 ```mermaid
 flowchart TB
-    search["TextField 'Buscar'"] -- bindValue --> searchSignal(["searchValue : ValueSignal&lt;String&gt;"])
+    search["TextField 'Buscar'"] -- bindValue --> searchSignal(["searchValue : ValueSignal#lt;String#gt;"])
     searchSignal -- "Signal.effect" --> refresh["updateCustomerList(query)<br/>→ grid.setItems(...)"]
 
-    grid["Grid&lt;Customer&gt;<br/>asSingleSelect()"] -- bindValue --> editedSignal(["editedCustomer : ValueSignal&lt;Customer&gt;"])
+    grid["Grid#lt;Customer#gt;<br/>asSingleSelect()"] -- bindValue --> editedSignal(["editedCustomer : ValueSignal#lt;Customer#gt;"])
     addBtn["Botón +"] -- "set(new Customer())" --> editedSignal
 
     editedSignal -- "Signal.effect" --> readBean["binder.readBean(customer)"]
